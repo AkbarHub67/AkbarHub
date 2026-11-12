@@ -1,0 +1,618 @@
+
+--==================================================
+-- AKBARHUB | MALAM BERSAMA OPAH
+-- ALL IN ONE EDITION
+--==================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local ProximityPromptService =
+    game:GetService("ProximityPromptService")
+
+local LP = Players.LocalPlayer
+local PlayerGui = LP:WaitForChild("PlayerGui")
+
+-- RAYFIELD
+local Rayfield = loadstring(game:HttpGet(
+    "https://sirius.menu/rayfield"
+))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "AkbarHub | Malam Bersama Opah",
+    LoadingTitle = "AkbarHub",
+    LoadingSubtitle = "All In One Edition",
+    ConfigurationSaving = {Enabled = false}
+})
+
+-- TABS
+local KeyTab = Window:CreateTab("Key ESP", 4483362458)
+local CodeTab = Window:CreateTab("Code Finder", 4483362458)
+local OpahTab = Window:CreateTab("Opah Detector", 4483362458)
+local VisualTab = Window:CreateTab("Visual", 4483362458)
+local PromptTab = Window:CreateTab("Auto Prompt", 4483362458)
+local StaminaTab = Window:CreateTab("Stamina", 4483362458)
+
+-- SETTINGS
+local Settings = {
+    Key = false,
+    Code = false,
+    Opah = false,
+    AutoKey = false
+}
+
+local Objects = {
+    Key = {},
+    Code = {},
+    Opah = {}
+}
+
+local Colors = {
+    Key = Color3.fromRGB(255,220,0),
+    Code = Color3.fromRGB(0,255,80),
+    Opah = Color3.fromRGB(255,0,0)
+}
+
+local Names = {
+    Key = "Key",
+    Opah = "Opah"
+}
+
+--==================================================
+-- GET PART
+--==================================================
+
+local function GetPart(obj)
+    if obj:IsA("BasePart") then
+        return obj
+    elseif obj:IsA("Model") then
+        return obj.PrimaryPart
+            or obj:FindFirstChildWhichIsA("BasePart", true)
+    end
+end
+
+--==================================================
+-- CLEAR ESP
+--==================================================
+
+local function Clear(category)
+    for obj, data in pairs(Objects[category]) do
+        if data.Highlight then
+            data.Highlight:Destroy()
+        end
+
+        if data.Billboard then
+            data.Billboard:Destroy()
+        end
+    end
+
+    table.clear(Objects[category])
+end
+
+--==================================================
+-- CREATE ESP
+--==================================================
+
+local function CreateESP(obj, category)
+    if Objects[category][obj] then return end
+
+    local part = GetPart(obj)
+    if not part then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = obj
+    highlight.FillColor = Colors[category]
+    highlight.OutlineColor = Color3.new(1,1,1)
+    highlight.FillTransparency = 0.1
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = obj
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "AkbarHubESP"
+    billboard.Adornee = part
+    billboard.Size = UDim2.fromOffset(160,45)
+    billboard.StudsOffset = Vector3.new(0,2.5,0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = PlayerGui
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.fromScale(1,1)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Colors[category]
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.GothamBold
+    label.TextScaled = true
+    label.Parent = billboard
+
+    Objects[category][obj] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Label = label,
+        Part = part
+    }
+end
+
+--==================================================
+-- FEATURE TOGGLE
+--==================================================
+
+local function CreateFeature(tab, category, title)
+    tab:CreateToggle({
+        Name = title .. " + Distance",
+        CurrentValue = false,
+        Callback = function(value)
+            Settings[category] = value
+
+            if not value then
+                Clear(category)
+            end
+        end
+    })
+
+    tab:CreateButton({
+        Name = "Refresh " .. title,
+        Callback = function()
+            Clear(category)
+        end
+    })
+end
+
+CreateFeature(KeyTab, "Key", "Key Highlight")
+CreateFeature(OpahTab, "Opah", "Opah Detector")
+
+--==================================================
+-- CODE FINDER
+--==================================================
+
+CodeTab:CreateToggle({
+    Name = "Auto Code Finder",
+    CurrentValue = false,
+    Callback = function(value)
+        Settings.Code = value
+
+        if not value then
+            Clear("Code")
+        end
+    end
+})
+
+CodeTab:CreateButton({
+    Name = "Refresh Code",
+    Callback = function()
+        Clear("Code")
+    end
+})
+
+local function IsCodePrompt(prompt)
+    if not prompt:IsA("ProximityPrompt") then
+        return false
+    end
+
+    local combined = string.lower(
+        (prompt.ActionText or "") .. " " ..
+        (prompt.ObjectText or "")
+    )
+
+    return string.find(combined,"passcode",1,true)
+        or string.find(combined,"note",1,true)
+end
+
+local function GetCodeTarget(prompt)
+    local current = prompt.Parent
+    local nearestPart
+    local nearestModel
+
+    while current and current ~= Workspace do
+        if current:IsA("BasePart") and not nearestPart then
+            nearestPart = current
+        end
+
+        if current:IsA("Model") and not nearestModel then
+            nearestModel = current
+        end
+
+        current = current.Parent
+    end
+
+    if nearestModel and GetPart(nearestModel) then
+        return nearestModel
+    end
+
+    return nearestPart
+end
+
+local function ScanCodes()
+    for _,obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and IsCodePrompt(obj) then
+            local target = GetCodeTarget(obj)
+
+            if target then
+                CreateESP(target,"Code")
+            end
+        end
+    end
+end
+
+--==================================================
+-- FIRST LOCATION
+--==================================================
+
+local FirstLocation
+
+KeyTab:CreateButton({
+    Name = "Save First Location",
+    Callback = function()
+        local character = LP.Character
+        local root = character and
+            character:FindFirstChild("HumanoidRootPart")
+
+        if root then
+            FirstLocation = root.CFrame
+
+            Rayfield:Notify({
+                Title = "AkbarHub",
+                Content = "First Location Saved!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+KeyTab:CreateButton({
+    Name = "Return to First Location",
+    Callback = function()
+        local character = LP.Character
+        local root = character and
+            character:FindFirstChild("HumanoidRootPart")
+
+        if root and FirstLocation then
+            root.CFrame = FirstLocation
+        else
+            Rayfield:Notify({
+                Title = "AkbarHub",
+                Content = "Save First Location First!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+--==================================================
+-- AUTO PROMPT
+--==================================================
+
+local AutoPromptEnabled = false
+local OriginalPromptDuration = {}
+
+local function UpdatePrompts()
+    for _,prompt in ipairs(Workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") then
+            if AutoPromptEnabled then
+                if OriginalPromptDuration[prompt] == nil then
+                    OriginalPromptDuration[prompt] =
+                        prompt.HoldDuration
+                end
+
+                prompt.HoldDuration = 0
+            else
+                if OriginalPromptDuration[prompt] ~= nil then
+                    prompt.HoldDuration =
+                        OriginalPromptDuration[prompt]
+
+                    OriginalPromptDuration[prompt] = nil
+                end
+            end
+        end
+    end
+end
+
+PromptTab:CreateToggle({
+    Name = "Auto Prompt Instant",
+    CurrentValue = false,
+    Callback = function(value)
+        AutoPromptEnabled = value
+        UpdatePrompts()
+    end
+})
+
+Workspace.DescendantAdded:Connect(function(obj)
+    if AutoPromptEnabled and obj:IsA("ProximityPrompt") then
+        OriginalPromptDuration[obj] = obj.HoldDuration
+        obj.HoldDuration = 0
+    end
+end)
+
+--==================================================
+-- AUTO KEY INVENTORY SCANNER
+--==================================================
+
+local function GetKeyCount()
+    local count = 0
+
+    local backpack = LP:FindFirstChild("Backpack")
+    local character = LP.Character
+
+    for _,container in ipairs({backpack,character}) do
+        if container then
+            for _,obj in ipairs(container:GetChildren()) do
+                if obj:IsA("Tool")
+                    and string.find(
+                        string.lower(obj.Name),
+                        "key",1,true
+                    ) then
+                    count += 1
+                end
+            end
+        end
+    end
+
+    return count
+end
+
+local function FindKey()
+    for _,obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Key" then
+            local part = GetPart(obj)
+
+            if part then
+                return obj,part
+            end
+        end
+    end
+end
+
+KeyTab:CreateToggle({
+    Name = "Auto Key + Auto Return",
+    CurrentValue = false,
+    Callback = function(value)
+        Settings.AutoKey = value
+
+        if value and not FirstLocation then
+            Settings.AutoKey = false
+
+            Rayfield:Notify({
+                Title = "Auto Key",
+                Content = "Save First Location First!",
+                Duration = 3
+            })
+            return
+        end
+
+        if not value then return end
+
+        task.spawn(function()
+            while Settings.AutoKey do
+                local target,part = FindKey()
+
+                if not target then
+                    task.wait(1)
+                    continue
+                end
+
+                local beforeCount = GetKeyCount()
+
+                local character = LP.Character
+                local root = character and
+                    character:FindFirstChild("HumanoidRootPart")
+
+                if not root then
+                    task.wait(1)
+                    continue
+                end
+
+                -- TELEPORT TO KEY
+                root.CFrame = part.CFrame * CFrame.new(0,3,0)
+
+                -- WAIT FOR INVENTORY CHANGE
+                local elapsed = 0
+                local collected = false
+
+                while Settings.AutoKey and elapsed < 30 do
+                    task.wait(0.25)
+                    elapsed += 0.25
+
+                    if GetKeyCount() > beforeCount then
+                        collected = true
+                        break
+                    end
+                end
+
+                -- RETURN AFTER COLLECTION
+                if collected and Settings.AutoKey then
+                    character = LP.Character
+                    root = character and
+                        character:FindFirstChild("HumanoidRootPart")
+
+                    if root and FirstLocation then
+                        root.CFrame = FirstLocation
+
+                        Rayfield:Notify({
+                            Title = "Auto Key",
+                            Content = "Key Collected! Returned!",
+                            Duration = 2
+                        })
+                    end
+                end
+
+                task.wait(1)
+            end
+        end)
+    end
+})
+
+--==================================================
+-- FULLBRIGHT
+--==================================================
+
+local OriginalLighting
+
+local function EnableFullBright()
+    if not OriginalLighting then
+        OriginalLighting = {
+            Brightness = Lighting.Brightness,
+            ClockTime = Lighting.ClockTime,
+            FogEnd = Lighting.FogEnd,
+            GlobalShadows = Lighting.GlobalShadows,
+            Ambient = Lighting.Ambient,
+            OutdoorAmbient = Lighting.OutdoorAmbient,
+            ExposureCompensation =
+                Lighting.ExposureCompensation
+        }
+    end
+
+    Lighting.Brightness = 3
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.Ambient = Color3.new(1,1,1)
+    Lighting.OutdoorAmbient = Color3.new(1,1,1)
+    Lighting.ExposureCompensation = 0
+end
+
+local function DisableFullBright()
+    if not OriginalLighting then return end
+
+    for property,value in pairs(OriginalLighting) do
+        Lighting[property] = value
+    end
+
+    OriginalLighting = nil
+end
+
+VisualTab:CreateToggle({
+    Name = "FullBright",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            EnableFullBright()
+        else
+            DisableFullBright()
+        end
+    end
+})
+
+--==================================================
+-- STAMINA SCANNER
+--==================================================
+
+StaminaTab:CreateButton({
+    Name = "Scan Stamina System",
+    Callback = function()
+        local found = {}
+
+        for _,obj in ipairs(LP:GetDescendants()) do
+            local name = string.lower(obj.Name)
+
+            if string.find(name,"stamina",1,true)
+                or string.find(name,"energy",1,true)
+                or string.find(name,"sprint",1,true) then
+
+                table.insert(found,
+                    obj:GetFullName() ..
+                    " [" .. obj.ClassName .. "]"
+                )
+            end
+        end
+
+        for name,value in pairs(LP:GetAttributes()) do
+            local lower = string.lower(name)
+
+            if string.find(lower,"stamina",1,true)
+                or string.find(lower,"energy",1,true) then
+
+                table.insert(found,
+                    "Attribute: " .. name ..
+                    " = " .. tostring(value)
+                )
+            end
+        end
+
+        for _,result in ipairs(found) do
+            print("[AKBARHUB STAMINA] " .. result)
+        end
+
+        Rayfield:Notify({
+            Title = "Stamina Scanner",
+            Content = #found > 0
+                and "Found " .. #found .. " stamina entries. Check Output."
+                or "No stamina entries found.",
+            Duration = 5
+        })
+    end
+})
+
+--==================================================
+-- MAIN LOOP
+--==================================================
+
+local ScanTimer = 0
+
+RunService.Heartbeat:Connect(function(dt)
+    local character = LP.Character
+    local root = character and
+        character:FindFirstChild("HumanoidRootPart")
+
+    if not root then return end
+
+    ScanTimer += dt
+
+    if ScanTimer >= 0.5 then
+        ScanTimer = 0
+
+        for category,enabled in pairs(Settings) do
+            if enabled and Names[category] then
+                for _,obj in ipairs(Workspace:GetDescendants()) do
+                    if obj.Name == Names[category] then
+                        CreateESP(obj,category)
+                    end
+                end
+            end
+        end
+
+        if Settings.Code then
+            ScanCodes()
+        end
+    end
+
+    -- UPDATE DISTANCE
+    for category,objects in pairs(Objects) do
+        for obj,data in pairs(objects) do
+            if not obj:IsDescendantOf(Workspace)
+                or not data.Part.Parent
+                or not Settings[category] then
+
+                if data.Highlight then
+                    data.Highlight:Destroy()
+                end
+
+                if data.Billboard then
+                    data.Billboard:Destroy()
+                end
+
+                objects[obj] = nil
+            else
+                local distance =
+                    (root.Position-data.Part.Position).Magnitude
+
+                data.Label.Text = string.format(
+                    "%s\n%.0f STUDS",
+                    category == "Code"
+                        and "PASSCODE NOTE"
+                        or string.upper(category),
+                    distance
+                )
+            end
+        end
+    end
+end)
+
+--==================================================
+-- NOTIFICATION
+--==================================================
+
+Rayfield:Notify({
+    Title = "AkbarHub",
+    Content = "All In One Loaded!",
+    Duration = 5
+})
